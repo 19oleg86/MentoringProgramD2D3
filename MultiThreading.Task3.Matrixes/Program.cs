@@ -7,6 +7,7 @@
  */
 
 using System;
+using System.Diagnostics;
 using MultiThreading.Task3.MatrixMultiplier.Matrices;
 using MultiThreading.Task3.MatrixMultiplier.Multipliers;
 
@@ -16,28 +17,46 @@ namespace MultiThreading.Task3.MatrixMultiplier
     {
         static void Main(string[] args)
         {
-            Console.WriteLine("3.	Write a program, which multiplies two matrices and uses class Parallel. ");
+            Console.WriteLine("3. Write a program, which multiplies two matrices and uses class Parallel. ");
             Console.WriteLine();
 
-            const byte matrixSize = 7; // todo: use any number you like or enter from console
+            const byte matrixSize = 10;//byte.MaxValue; // todo: use any number you like or enter from console
             CreateAndProcessMatrices(matrixSize);
             Console.ReadLine();
         }
 
         private static void CreateAndProcessMatrices(byte sizeOfMatrix)
         {
-            Console.WriteLine("Multiplying...");
-            var firstMatrix = new Matrix(sizeOfMatrix, sizeOfMatrix);
-            var secondMatrix = new Matrix(sizeOfMatrix, sizeOfMatrix);
-
+            Console.WriteLine("Multiplying Sequential Loop...");
+            var firstMatrix = new Matrix(sizeOfMatrix, sizeOfMatrix, true);
+            var secondMatrix = new Matrix(sizeOfMatrix, sizeOfMatrix, true);
+            Stopwatch stopwatch = new Stopwatch();
+            stopwatch.Start();
             IMatrix resultMatrix = new MatricesMultiplier().Multiply(firstMatrix, secondMatrix);
-
+            stopwatch.Stop();
+            
             Console.WriteLine("firstMatrix:");
             firstMatrix.Print();
             Console.WriteLine("secondMatrix:");
             secondMatrix.Print();
             Console.WriteLine("resultMatrix:");
             resultMatrix.Print();
+            Console.WriteLine($"Sequential Loop execution time: {stopwatch.ElapsedMilliseconds}");
+            stopwatch.Reset();
+
+            Console.WriteLine();
+            Console.WriteLine("Multiplying Parallel Loop...");
+            stopwatch.Start();
+            IMatrix resultMatrixParallel = new MatricesMultiplierParallel().Multiply(firstMatrix, secondMatrix);
+            stopwatch.Stop();
+
+            Console.WriteLine("firstMatrix:");
+            firstMatrix.Print();
+            Console.WriteLine("secondMatrix:");
+            secondMatrix.Print();
+            Console.WriteLine("resultMatrix:");
+            resultMatrixParallel.Print();
+            Console.WriteLine($"Parallel Loop execution time: {stopwatch.ElapsedMilliseconds}");
         }
     }
 }
