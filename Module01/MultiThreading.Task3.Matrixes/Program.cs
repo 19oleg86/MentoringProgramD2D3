@@ -20,7 +20,7 @@ namespace MultiThreading.Task3.MatrixMultiplier
             Console.WriteLine("3. Write a program, which multiplies two matrices and uses class Parallel. ");
             Console.WriteLine();
 
-            const byte matrixSize = 10;//byte.MaxValue; // todo: use any number you like or enter from console
+            const byte matrixSize = byte.MaxValue; // todo: use any number you like or enter from console
             CreateAndProcessMatrices(matrixSize);
             Console.ReadLine();
         }
