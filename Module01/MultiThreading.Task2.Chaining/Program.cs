@@ -6,15 +6,14 @@
  * Fourth Task – calculates the average value. All this tasks should print the values to console.
  */
 using System;
-using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 
 namespace MultiThreading.Task2.Chaining
 {
-    class Program
+    internal static class Program
     {
-        static void Main(string[] args)
+        private static void Main()
         {
             Console.WriteLine(".Net Mentoring Program. MultiThreading V1 ");
             Console.WriteLine("2.	Write a program, which creates a chain of four Tasks.");
@@ -36,11 +35,12 @@ namespace MultiThreading.Task2.Chaining
 
             firstTask.Start();
             fourthTask.Wait();
+            Console.WriteLine("Finished!");
 
             Console.ReadLine();
         }
 
-        static int[] GenerateArray(Random random)
+        private static int[] GenerateArray(Random random)
         {
             var array = new int[10];
 
@@ -53,7 +53,7 @@ namespace MultiThreading.Task2.Chaining
             return array;
         }
 
-        static int[] MultiplyArray(int[] inputArray, Random random) 
+        private static int[] MultiplyArray(int[] inputArray, Random random) 
         {
             int randomInteger = random.Next(2, 11);
             Console.WriteLine($"Multiplier is: {randomInteger}");
@@ -66,7 +66,7 @@ namespace MultiThreading.Task2.Chaining
             return inputArray;
         }
 
-        static int[] SortArray(int[] inputArray)
+        private static int[] SortArray(int[] inputArray)
         {
             Array.Sort(inputArray);
             for (int i = 0; i < inputArray.Length; i++)
@@ -77,7 +77,7 @@ namespace MultiThreading.Task2.Chaining
             return inputArray;
         }
 
-        static void CalculateAverage(int[] inputArray)
+        private static void CalculateAverage(int[] inputArray)
         {
             Console.WriteLine($"Average of array's elements is: {inputArray.Average()}");
         }

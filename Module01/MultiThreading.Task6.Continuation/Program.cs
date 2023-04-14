@@ -7,14 +7,15 @@
    Demonstrate the work of the each case with console utility.
 */
 using System;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 
 namespace MultiThreading.Task6.Continuation
 {
-    class Program
+    internal static class Program
     {
-        static void Main(string[] args)
+        private static void Main()
         {
             Console.WriteLine("Create a Task and attach continuations to it according to the following criteria:");
             Console.WriteLine("a.    Continuation task should be executed regardless of the result of the parent task.");
@@ -27,186 +28,171 @@ namespace MultiThreading.Task6.Continuation
             // feel free to add your code
             ExecuteRegardlessParentResult();
             Console.WriteLine();
+            Console.WriteLine();
             ExecuteOnParentFaultResult();
+            Console.WriteLine();
             Console.WriteLine();
             ExecuteOnParentFaultWithParentThread();
             Console.WriteLine();
+            Console.WriteLine();
             ExecuteOutsideOfThreadPoolWhenParentCancelled();
+            Console.WriteLine();
+            Console.WriteLine();
+            Console.WriteLine("Finished!");
 
             Console.ReadLine();
         }
 
-        #region Task a
-        static void ExecuteRegardlessParentResult()
+        /// <summary>
+        /// Если <see cref="throwEx"/> = null, то исключения вызвано не будет, если false то на 8-й итарации будет вызвано исключение
+        /// иначе исключение будет вызвано если был запрос на отмену
+        /// </summary>
+        private static Task CreateCalcFunc(CancellationToken token, bool throwEx)
         {
-            Console.WriteLine("Task a.");
-            CancellationTokenSource cancelTokenSource = new CancellationTokenSource();
-            CancellationToken token = cancelTokenSource.Token;
-
-            Task task = new Task(() =>
+            return Task.Factory.StartNew(() =>
             {
                 Console.WriteLine("Display squares of numbers:");
                 for (int i = 1; i <= 10; i++)
                 {
-                    if (token.IsCancellationRequested)
-                    {
-                        token.ThrowIfCancellationRequested();
-                    }
-                    Console.WriteLine($"Square of {i} is equal to {i * i}");
+                    Console.WriteLine($"ManagedThreadId:{Thread.CurrentThread.ManagedThreadId}. Square of {i} is equal to {Math.Pow(i, 2)}");
                     Thread.Sleep(300);
+
+                    token.ThrowIfCancellationRequested();
+                    
+                    if (throwEx && i == 8)
+                    {
+                        throw new Exception("Operation is interrupted.");
+                    }
                 }
             }, token);
+        }
+
+
+        private static void ExecTask(Func<Task, Task> getContinueTask, bool? throwCancel)
+        {
+            CancellationTokenSource cancelTokenSource = new CancellationTokenSource();
+
+            Task mainTask = CreateCalcFunc(cancelTokenSource.Token, throwCancel != null);
+            Task continueTask = getContinueTask(mainTask);
+
             try
             {
-                task.Start();
-                Thread.Sleep(1000);
-                cancelTokenSource.Cancel();
-                task.Wait();
-            }
-            catch (AggregateException ae)
-            {
-                foreach (Exception e in ae.InnerExceptions)
+                if (throwCancel == true)
                 {
-                    if (e is TaskCanceledException)
-                        Console.WriteLine("Operation is interrupted");
-                    else
-                        Console.WriteLine(e.Message);
+                    Thread.Sleep(1000);
+                    cancelTokenSource.Cancel();
                 }
+
+                mainTask.Wait(cancelTokenSource.Token);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine((ex.InnerException ?? ex).Message);
             }
             finally
             {
                 cancelTokenSource.Dispose();
             }
 
-            task.ContinueWith(antecedent => Console.WriteLine($"Continuation Task Completed regardless Antecedent Task execution result"), TaskContinuationOptions.None);
+            try
+            {
+                continueTask.Wait();
+            }
+            catch(AggregateException ex)
+            {
+                if (!ex.InnerExceptions.Any(_ => _ is TaskCanceledException))
+                {
+                    throw;
+                }
+                //Ничего не делаем ContinueTask не выполнился из-за условия
+            }
 
-            Thread.Sleep(1000);
-            Console.WriteLine($"Antecedent Task status: {task.Status}");
-            cancelTokenSource.Dispose();
+            Console.WriteLine($"Antecedent Task status: {mainTask.Status}");
         }
+
+        #region Task a
+
+        private static void ExecuteRegardlessParentResult()
+        {
+            Console.WriteLine("Task a.");
+            ExecTask(mainTask => mainTask.ContinueWith(antecedent => 
+                    Console.WriteLine($"ManagedThreadId:{Thread.CurrentThread.ManagedThreadId}." +
+                    "Continuation Task Completed regardless Antecedent Task execution result."),
+                TaskContinuationOptions.None), false);
+
+            Console.WriteLine();
+
+            ExecTask(mainTask => mainTask.ContinueWith(antecedent =>
+                    Console.WriteLine($"ManagedThreadId:{Thread.CurrentThread.ManagedThreadId}." +
+                                      "Continuation Task Completed regardless Antecedent Task execution result."),
+                TaskContinuationOptions.None), null);
+        }
+
         #endregion
 
         #region Task b
-        static void ExecuteOnParentFaultResult()
+
+        private static void ExecuteOnParentFaultResult()
         {
             Console.WriteLine("Task b.");
-            CancellationTokenSource cancelTokenSource = new CancellationTokenSource();
-            CancellationToken token = cancelTokenSource.Token;
 
-            Task task = new Task(() =>
-            {
-                Console.WriteLine("Display squares of numbers:");
-                for (int i = 1; i <= 10; i++)
-                {
-                    if (token.IsCancellationRequested)
-                    {
-                        throw new Exception("Antecedent task failed.");
-                    }
-                    Console.WriteLine($"Square of {i} is equal to {i * i}");
-                    Thread.Sleep(300);
-                }
-            }, token);
-            try
-            {
-                task.Start();
-                Thread.Sleep(1000);
-                cancelTokenSource.Cancel();
-                task.Wait();
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine(ex.Message);
-            }
-            finally
-            {
-                cancelTokenSource.Dispose();
-            }
+            ExecTask(mainTask => mainTask.ContinueWith(antecedent =>
+                    Console.WriteLine(
+                        $"ManagedThreadId:{Thread.CurrentThread.ManagedThreadId}." +
+                        "Continuation Task Completed regardless Antecedent Task was executed without success"),
+                TaskContinuationOptions.OnlyOnFaulted), false);
+            
+            Console.WriteLine();
 
-            task.ContinueWith(antecedent => Console.WriteLine($"Continuation Task Completed regardless Antecedent Task was executed without success"), TaskContinuationOptions.OnlyOnFaulted);
-
-            Thread.Sleep(1000);
-            Console.Write($"Antecedent Task status: {task.Status}");
-            cancelTokenSource.Dispose();
+            ExecTask(mainTask => mainTask.ContinueWith(antecedent =>
+                    Console.WriteLine(
+                        $"ManagedThreadId:{Thread.CurrentThread.ManagedThreadId}." +
+                        "Continuation Task Not Completed"),
+                TaskContinuationOptions.OnlyOnFaulted), null);
         }
+
         #endregion
 
         #region Task c
-        static void ExecuteOnParentFaultWithParentThread()
+
+        private static void ExecuteOnParentFaultWithParentThread()
         {
             Console.WriteLine("Task c.");
-            Task parentTask = new Task(() =>
-            {
-                Console.WriteLine();
-                Console.WriteLine("Some work in Parent thread");
-                throw new Exception("Parent task failed");
-            });
-            try
-            {
-                parentTask.Start();
-                Task continuationTask = parentTask.ContinueWith(antecedentTask =>
-                {
-                    Console.WriteLine("Continuation Task executed on Antecedent Task's thread after it's failed ");
-                    Console.WriteLine($"Antecedent Task status: {parentTask.Status}");
-                }, TaskContinuationOptions.ExecuteSynchronously | TaskContinuationOptions.OnlyOnFaulted);
 
-                continuationTask.Wait();
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine(ex.Message);
-            }
+            ExecTask(mainTask => mainTask.ContinueWith(antecedent =>
+                    Console.WriteLine($"ManagedThreadId:{Thread.CurrentThread.ManagedThreadId}." +
+                                      "Continuation Task executed on Antecedent Task's thread after it's failed "),
+                TaskContinuationOptions.ExecuteSynchronously | TaskContinuationOptions.OnlyOnFaulted), false);
+
+            Console.WriteLine();
+
+            ExecTask(mainTask => mainTask.ContinueWith(antecedent =>
+                    Console.WriteLine($"ManagedThreadId:{Thread.CurrentThread.ManagedThreadId}." +
+                                      "Continuation Task Not Completed"),
+                TaskContinuationOptions.ExecuteSynchronously | TaskContinuationOptions.OnlyOnFaulted), null);
         }
+
         #endregion
 
         #region Task d
-        static void ExecuteOutsideOfThreadPoolWhenParentCancelled()
+
+        private static void ExecuteOutsideOfThreadPoolWhenParentCancelled()
         {
             Console.WriteLine("Task d.");
-            CancellationTokenSource cancelTokenSource = new CancellationTokenSource();
-            CancellationToken token = cancelTokenSource.Token;
 
-            Task task = new Task(() =>
-            {
-                Console.WriteLine("Display squares of numbers:");
-                for (int i = 1; i <= 10; i++)
-                {
-                    if (token.IsCancellationRequested)
-                    {
-                        token.ThrowIfCancellationRequested();
-                    }
-                    Console.WriteLine($"Square of {i} is equal to {i * i}");
-                    Thread.Sleep(300);
-                }
-            }, token);
-            try
-            {
-                task.Start();
-                Thread.Sleep(1000);
-                cancelTokenSource.Cancel();
-                task.Wait();
-            }
-            catch (AggregateException ae)
-            {
-                foreach (Exception e in ae.InnerExceptions)
-                {
-                    if (e is TaskCanceledException)
-                        Console.WriteLine("Operation is interrupted");
-                    else
-                        Console.WriteLine(e.Message);
-                }
-            }
-            finally
-            {
-                cancelTokenSource.Dispose();
-            }
+            ExecTask(mainTask => mainTask.ContinueWith(antecedent =>
+                    Console.WriteLine($"ManagedThreadId:{Thread.CurrentThread.ManagedThreadId}." +
+                                      "Continuation Task Completed outside of ThreadPool when Parent Task was cancelled"),
+                TaskContinuationOptions.RunContinuationsAsynchronously | TaskContinuationOptions.OnlyOnCanceled), true);
 
-            task.ContinueWith(antecedent => Console.WriteLine($"Continuation Task Completed outside of ThreadPool when Parent Task was cancelled"), 
-                TaskContinuationOptions.RunContinuationsAsynchronously | TaskContinuationOptions.OnlyOnCanceled);
+            Console.WriteLine();
 
-            Thread.Sleep(1000);
-            Console.WriteLine($"Antecedent Task status: {task.Status}");
-            cancelTokenSource.Dispose();
+            ExecTask(mainTask => mainTask.ContinueWith(antecedent =>
+                    Console.WriteLine($"ManagedThreadId:{Thread.CurrentThread.ManagedThreadId}." +
+                                      "Continuation Task Not Completed"),
+                TaskContinuationOptions.RunContinuationsAsynchronously | TaskContinuationOptions.OnlyOnCanceled), null);
         }
+
         #endregion
     }
 }

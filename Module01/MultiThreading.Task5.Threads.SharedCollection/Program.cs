@@ -10,13 +10,13 @@ using System.Threading;
 
 namespace MultiThreading.Task5.Threads.SharedCollection
 {
-    class Program
+    internal static class Program
     {
-        static List<int> collection = new List<int>();
-        static ManualResetEventSlim event1 = new ManualResetEventSlim(false);
-        static ManualResetEventSlim event2 = new ManualResetEventSlim(false);
+        private static readonly List<int> collection = new List<int>();
+        private static readonly ManualResetEventSlim event1 = new ManualResetEventSlim(true);
+        private static readonly ManualResetEventSlim event2 = new ManualResetEventSlim(false);
 
-        static void Main(string[] args)
+        private static void Main()
         {
             Console.WriteLine("5. Write a program which creates two threads and a shared collection:");
             Console.WriteLine("the first one should add 10 elements into the collection and the second should print all elements in the collection after each adding.");
@@ -36,34 +36,28 @@ namespace MultiThreading.Task5.Threads.SharedCollection
             Console.ReadLine();
         }
 
-        static void AddElements()
+        private static void AddElements()
         {
-            while (collection.Count <= 10)
+            for (int i = 1; i <= 10; i++)
             {
-                for (int i = 1; i <= 10; i++)
-                {
-                    event1.Wait();
-                    collection.Add(i);
-                    Console.WriteLine($"{Thread.CurrentThread.Name} Added element {i} to the collection");
-                    event1.Reset();
-                    event2.Set();
-                }
+                event1.Wait();
+                collection.Add(i);
+                Console.WriteLine($"{Thread.CurrentThread.Name} Added element {i} to the collection");
+                event1.Reset();
+                event2.Set();
             }
         }
 
-        static void PrintElements()
+        private static void PrintElements()
         {
-            while (collection.Count <= 10)
+            while (collection.Count < 10)
             {
-                Console.Write($"{Thread.CurrentThread.Name} prints collection: ");
-                for (int i = 0; i < collection.Count; i++)
-                {
-                    Console.Write($"{collection[i]}, ");
-                }
-                Console.WriteLine();
-                event1.Set();
                 event2.Wait();
+                Console.Write($"{Thread.CurrentThread.Name} prints collection: ");
+                Console.WriteLine($"[{string.Join(",", collection)}]");
+                Console.WriteLine();
                 event2.Reset();
+                event1.Set();
             }
         }
     }

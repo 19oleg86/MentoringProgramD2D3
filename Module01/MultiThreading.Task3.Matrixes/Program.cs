@@ -13,9 +13,9 @@ using MultiThreading.Task3.MatrixMultiplier.Multipliers;
 
 namespace MultiThreading.Task3.MatrixMultiplier
 {
-    class Program
+    internal static class Program
     {
-        static void Main(string[] args)
+        static void Main()
         {
             Console.WriteLine("3. Write a program, which multiplies two matrices and uses class Parallel. ");
             Console.WriteLine();
