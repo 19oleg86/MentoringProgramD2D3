@@ -1,4 +1,5 @@
-﻿using System.Threading;
+﻿using System;
+using System.Threading;
 using System.Threading.Tasks;
 
 namespace AsyncAwait.Task1.CancellationTokens;
@@ -22,7 +23,7 @@ internal static class Calculator
                 token.ThrowIfCancellationRequested();
             }
         }
-
+        Console.WriteLine("Out of Sum calculation cycle");
         return sum;
     }
 }
