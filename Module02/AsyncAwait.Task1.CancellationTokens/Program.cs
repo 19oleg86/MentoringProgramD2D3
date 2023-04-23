@@ -51,20 +51,26 @@ internal class Program
     private static async Task CalculateSum(int n)
     {
         // todo: make calculation asynchronous
-        try
-        {
-            cts?.Cancel();
-            cts = new CancellationTokenSource();
-            var sum = Calculator.CalculateAsync(n, cts.Token);
-            Console.WriteLine();
-            Console.WriteLine($"The task for {n} started... Enter N to cancel the request:");
+        cts?.Cancel();
+        cts = new CancellationTokenSource();
+        var sum = Calculator.CalculateAsync(n, cts.Token);
+        Console.WriteLine();
+        Console.WriteLine($"The task for {n} started... Enter N to cancel the request:");
 
-            var sumResult = await sum;
-            Console.WriteLine($"Sum for {n} = {sumResult}.");
-        }
-        catch (OperationCanceledException) // todo: add code to process cancellation and uncomment this line   
+        await sum.ContinueWith(t =>
         {
-            Console.WriteLine($"Sum for {n} cancelled...");
-        }
+            if (t.IsCanceled)
+            {
+                Console.WriteLine($"Sum for {n} cancelled...");
+            }
+            else if (t.IsFaulted)
+            {
+                Console.WriteLine($"Error occurred while calculating sum for {n}: {t.Exception}");
+            }
+            else
+            {
+                Console.WriteLine($"Sum for {n} = {t.Result}");
+            }
+        });
     }
 }
