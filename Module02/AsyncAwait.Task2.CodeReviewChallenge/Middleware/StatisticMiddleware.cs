@@ -1,6 +1,5 @@
 ﻿using System;
-using System.Collections.Generic;
-using System.Threading;
+using System.Collections.Concurrent;
 using System.Threading.Tasks;
 using AsyncAwait.Task2.CodeReviewChallenge.Headers;
 using CloudServices.Interfaces;
@@ -13,8 +12,7 @@ public class StatisticMiddleware
     private readonly RequestDelegate _next;
 
     private readonly IStatisticService _statisticService;
-
-    private readonly IDictionary<string, long> pageVisitCounts = new Dictionary<string, long>();
+    private static readonly ConcurrentDictionary<string, int> _unregisteredClicks = new ConcurrentDictionary<string, int>();
 
     public StatisticMiddleware(RequestDelegate next, IStatisticService statisticService)
     {
@@ -22,36 +20,33 @@ public class StatisticMiddleware
         _statisticService = statisticService ?? throw new ArgumentNullException(nameof(statisticService));
     }
 
-    private void IncrementPageVisitCount(string path)
-    {
-        if (!pageVisitCounts.ContainsKey(path))
-        {
-            pageVisitCounts[path] = 1;
-        }
-        else
-        {
-            pageVisitCounts[path]++;
-        }
-    }
-
     public async Task InvokeAsync(HttpContext context)
     {
-        string path = context.Request.Path;
-
-        IncrementPageVisitCount(path);
-
-        _statisticService.RegisterVisitAsync(path);
-        await UpdateHeaders(context, path);
-
+        RegisterVisit(context);
+        await UpdateHeaders(context);
         await _next(context);
     }
 
-    private async Task UpdateHeaders(HttpContext context, string path)
+    private static string GetCurrentRequestUrlPath(HttpContext context) 
+        => context.Request.Path.ToString().ToLower();
+
+    private async Task UpdateHeaders(HttpContext context)
     {
-        var visits = await _statisticService.GetVisitsCountAsync(path);
-        var realVisits = visits != pageVisitCounts[path] ? pageVisitCounts[path] : visits;
-        context.Response.Headers.Add(
-            CustomHttpHeaders.TotalPageVisits,
-            realVisits.ToString());
+        string path = GetCurrentRequestUrlPath(context);
+        var count = await _statisticService.GetVisitsCountAsync(path);
+        _unregisteredClicks.TryGetValue(path, out var unregisteredClicksValue);
+        context.Response.Headers.Add(CustomHttpHeaders.TotalPageVisits, $"{count + unregisteredClicksValue}");
+    }
+
+    private async void RegisterVisit(HttpContext context)
+    {
+        string path = GetCurrentRequestUrlPath(context);
+        _unregisteredClicks.AddOrUpdate(path, 1, (_, currentValue) => { return currentValue + 1; });
+        await _statisticService.RegisterVisitAsync(path);
+        var unregisteredClicksValue = _unregisteredClicks.AddOrUpdate(path, 0, (_, currentValue) => { return currentValue - 1; });
+        if (unregisteredClicksValue <= 0)
+        {
+            _unregisteredClicks.TryRemove(path, out _);
+        }
     }
 }

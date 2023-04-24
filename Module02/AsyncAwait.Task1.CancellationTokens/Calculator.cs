@@ -13,17 +13,25 @@ internal static class Calculator
 
         for (var i = 0; i < n; i++)
         {
-            if (!token.IsCancellationRequested)
+            sum += i + 1; // i + 1 is to allow 2147483647 (Max(Int32)) 
+
+            try
             {
-                sum += (i + 1); // i + 1 is to allow 2147483647 (Max(Int32)) 
+                //Waiting for a long process
                 await Task.Delay(10, token);
             }
-            else
+            catch
             {
-                token.ThrowIfCancellationRequested();
+                //Do not care about exceptions just checking is it cancellation request
+                //if it's true throw the OperationCanceledException (stopping our loop)
+                if (token.IsCancellationRequested)
+                {
+                    Console.WriteLine($"({n}) => Calculation process CANCELED.");
+                    token.ThrowIfCancellationRequested();
+                }
             }
         }
-        Console.WriteLine("Out of Sum calculation cycle");
+
         return sum;
     }
 }

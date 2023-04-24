@@ -15,7 +15,10 @@ namespace AsyncAwait.Task1.CancellationTokens;
 
 internal class Program
 {
-    internal static CancellationTokenSource cts;
+    private static CancellationTokenSource _lastCancellationTokenSource;
+    private static Task<long> _lastMainProcessTask;
+    private static Task _lastContinueTask;
+
     /// <summary>
     /// The Main method should not be changed at all.
     /// </summary>
@@ -51,26 +54,35 @@ internal class Program
     private static async Task CalculateSum(int n)
     {
         // todo: make calculation asynchronous
-        cts?.Cancel();
-        cts = new CancellationTokenSource();
-        var sum = Calculator.CalculateAsync(n, cts.Token);
-        Console.WriteLine();
-        Console.WriteLine($"The task for {n} started... Enter N to cancel the request:");
 
-        await sum.ContinueWith(t =>
+        if (_lastMainProcessTask != null && !_lastMainProcessTask.IsCompleted)
         {
-            if (t.IsCanceled)
+            // We are going to start another one SUM process so we should cancel the SUM process for the previous task
+            _lastCancellationTokenSource.Cancel();
+
+            //We want to wait the previous task (cancellation process in our case) to complete in order all the necessary messages.
+            await _lastContinueTask;
+        }
+
+        using (var cts = new CancellationTokenSource())
+        {
+            _lastCancellationTokenSource = cts;
+
+            _lastMainProcessTask = Calculator.CalculateAsync(n, cts.Token);
+            _lastContinueTask = _lastMainProcessTask.ContinueWith(prevTask =>
             {
-                Console.WriteLine($"Sum for {n} cancelled...");
-            }
-            else if (t.IsFaulted)
-            {
-                Console.WriteLine($"Error occurred while calculating sum for {n}: {t.Exception}");
-            }
-            else
-            {
-                Console.WriteLine($"Sum for {n} = {t.Result}");
-            }
-        });
+                if (prevTask.IsCanceled)
+                {
+                    Console.WriteLine($"({n}) => Task CANCELED.");
+                    return;
+                }
+
+                Console.WriteLine($"({n}) => SUM = {prevTask.Result}.");
+            }, TaskContinuationOptions.None);
+
+            Console.WriteLine();
+            Console.WriteLine($"The task for {n} started... Enter N to cancel the request:");
+            await _lastContinueTask;
+        }
     }
 }
