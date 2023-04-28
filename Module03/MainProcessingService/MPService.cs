@@ -6,7 +6,7 @@ using System.Threading.Tasks;
 
 namespace MainProcessingService
 {
-    class Program
+    class MPService
     {
         static void Main(string[] args)
         {
