@@ -23,7 +23,7 @@ namespace DataCaptureService
                 watcher.Created += OnFileAdded;
                 watcher.EnableRaisingEvents = true;
 
-                Console.WriteLine($"To start working with Data Capture Service add some files in \"DataCaptureDirectoty\". {Environment.NewLine} " +
+                Console.WriteLine($"To start working with Data Capture Service add some files in \"DataCaptureDirectoty\". {Environment.NewLine}" +
                     $"Pay attention that only .pdf files will be processed and send to the queue");
 
                 Console.WriteLine("Press enter to exit.");
@@ -43,9 +43,9 @@ namespace DataCaptureService
                 };
                 var connection = factory.CreateConnection();
                 var channel = connection.CreateModel();
-                channel.ExchangeDeclare("webappExchange", ExchangeType.Direct, true);
+                channel.ExchangeDeclare("addFileExchange", ExchangeType.Direct, true);
                 byte[] fileBytes = File.ReadAllBytes(e.FullPath);
-                channel.BasicPublish("webappExchange", "file.pdf", null, fileBytes);
+                channel.BasicPublish("addFileExchange", "file.pdf", null, fileBytes);
 
                 channel.Close();
                 connection.Close();
@@ -60,7 +60,7 @@ namespace DataCaptureService
             };
             var connection = factory.CreateConnection();
             var channel = connection.CreateModel();
-            channel.ExchangeDeclare("webappExchange", ExchangeType.Direct, true);
+            channel.ExchangeDeclare("addFileExchange", ExchangeType.Direct, true);
             channel.Close();
             connection.Close();
         }
