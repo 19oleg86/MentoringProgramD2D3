@@ -1,11 +1,8 @@
 ﻿using RabbitMQ.Client;
 using RabbitMQ.Client.Events;
 using System;
-using System.Collections.Generic;
 using System.IO;
-using System.Linq;
 using System.Text;
-using System.Threading.Tasks;
 
 namespace MainProcessingService
 {
@@ -17,12 +14,8 @@ namespace MainProcessingService
             string workingDirectory = Environment.CurrentDirectory;
             string projectDirectory = Directory.GetParent(workingDirectory).Parent.FullName;
             string filePath = $"{projectDirectory}{TARGETFILEDIRECTORY}\\";
-            var factory = new ConnectionFactory
-            {
-                Uri = new Uri("amqp://guest:guest@localhost:5672")
-            };
-
-            var connection = factory.CreateConnection();
+            
+            var connection = GetConnection();
             var channel = connection.CreateModel();
 
             channel.QueueDeclare("addFileQueue", true, false, false);
@@ -41,7 +34,6 @@ namespace MainProcessingService
                 }
                 else if (fileSize == "big")
                 {
-                    var headers = eventArgs.BasicProperties.Headers;
                     var chunkNumber = Encoding.UTF8.GetString(eventArgs.BasicProperties.Headers["chunknumber"] as byte[]);
                     var chunkData = eventArgs.Body.ToArray();
 
@@ -57,6 +49,16 @@ namespace MainProcessingService
 
             channel.Close();
             connection.Close();
+        }
+
+        private static IConnection GetConnection()
+        {
+            var factory = new ConnectionFactory
+            {
+                Uri = new Uri("amqp://guest:guest@localhost:5672")
+            };
+            var connection = factory.CreateConnection();
+            return connection;
         }
 
         private static void AppendChunkToFile(byte[] chunkData, int chunkNumber, string outputFile)

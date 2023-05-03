@@ -2,10 +2,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
-using System.Linq;
-using System.Text;
 using System.Threading;
-using System.Threading.Tasks;
 
 namespace DataCaptureService
 {
@@ -43,61 +40,18 @@ namespace DataCaptureService
                 bool fileAvailable = false;
                 Console.WriteLine("Added file is in pdf format");
                 Console.WriteLine($"File's full name with path: {e.FullPath}");
-                var factory = new ConnectionFactory
-                {
-                    Uri = new Uri("amqp://guest:guest@localhost:5672")
-                };
-                var connection = factory.CreateConnection();
+
+                var connection = GetConnection();
                 var channel = connection.CreateModel();
                 channel.ExchangeDeclare("addFileExchange", ExchangeType.Headers, true);
+                byte[] fileBytes = null;
                 while (!fileAvailable)
                 {
                     try
                     {
-                        byte[] fileBytes = File.ReadAllBytes(e.FullPath);
+                        fileBytes = File.ReadAllBytes(e.FullPath);
                         fileAvailable = true;
-
-                        if (fileSize >= HUNDRED_MB_IN_BYTES)
-                        {
-                            Console.WriteLine($"Created file \"{e.Name}\" has 100 Mb or bigger size");
-                            var fileStream = new FileStream(e.FullPath, FileMode.Open, FileAccess.Read);
-                            var bigSizeheaders = new Dictionary<string, object>
-                            {
-                                { "fileName", fileName },
-                                { "size", "big" },
-                            };
-
-                            int chunkNumber = 1;
-                            byte[] buffer = new byte[52428800]; // 50MB
-                            while (fileStream.Position < fileStream.Length)
-                            {
-                                int bytesRead = fileStream.Read(buffer, 0, buffer.Length);
-                                byte[] chunkData = new byte[bytesRead];
-                                Array.Copy(buffer, chunkData, bytesRead);
-                                var bigSizeProperties = channel.CreateBasicProperties();
-                                bigSizeProperties.Headers = bigSizeheaders;
-                                if (!bigSizeProperties.Headers.ContainsKey("chunknumber"))
-                                    bigSizeProperties.Headers.Add("chunknumber", chunkNumber.ToString());
-                                bigSizeProperties.Headers["chunknumber"] = chunkNumber.ToString();
-
-                                channel.BasicPublish("addFileExchange", string.Empty, bigSizeProperties, chunkData);
-                                Console.WriteLine($"Sent chunk {chunkNumber}");
-                                chunkNumber++;
-                            }
-                            fileStream.Close();
-                        }
-                        else
-                        {
-                            var headers = new Dictionary<string, object>
-                            {
-                                { "fileName", fileName },
-                                { "size", "normal" }
-                            };
-                            var properties = channel.CreateBasicProperties();
-                            properties.Headers = headers;
-                            channel.BasicPublish("addFileExchange", string.Empty, properties, fileBytes);
-                        }
-
+                        break;
                     }
                     catch (IOException)
                     {
@@ -105,9 +59,59 @@ namespace DataCaptureService
                         Thread.Sleep(1000); // wait for 1 second before trying again
                     }
                 }
+                if (fileSize >= HUNDRED_MB_IN_BYTES)
+                {
+                    Console.WriteLine($"Created file \"{e.Name}\" has 100 Mb or bigger size");
+                    var fileStream = new FileStream(e.FullPath, FileMode.Open, FileAccess.Read);
+                    var bigSizeheaders = new Dictionary<string, object>
+                            {
+                                { "fileName", fileName },
+                                { "size", "big" },
+                            };
+
+                    int chunkNumber = 1;
+                    byte[] buffer = new byte[52428800]; // 50MB
+                    while (fileStream.Position < fileStream.Length)
+                    {
+                        int bytesRead = fileStream.Read(buffer, 0, buffer.Length);
+                        byte[] chunkData = new byte[bytesRead];
+                        Array.Copy(buffer, chunkData, bytesRead);
+                        var bigSizeProperties = channel.CreateBasicProperties();
+                        bigSizeProperties.Headers = bigSizeheaders;
+                        if (!bigSizeProperties.Headers.ContainsKey("chunknumber"))
+                            bigSizeProperties.Headers.Add("chunknumber", chunkNumber.ToString());
+                        bigSizeProperties.Headers["chunknumber"] = chunkNumber.ToString();
+
+                        channel.BasicPublish("addFileExchange", string.Empty, bigSizeProperties, chunkData);
+                        Console.WriteLine($"Sent chunk {chunkNumber}");
+                        chunkNumber++;
+                    }
+                    fileStream.Close();
+                }
+                else
+                {
+                    var headers = new Dictionary<string, object>
+                            {
+                                { "fileName", fileName },
+                                { "size", "normal" }
+                            };
+                    var properties = channel.CreateBasicProperties();
+                    properties.Headers = headers;
+                    channel.BasicPublish("addFileExchange", string.Empty, properties, fileBytes);
+                }
                 channel.Close();
                 connection.Close();
             }
+        }
+
+        private static IConnection GetConnection()
+        {
+            var factory = new ConnectionFactory
+            {
+                Uri = new Uri("amqp://guest:guest@localhost:5672")
+            };
+            var connection = factory.CreateConnection();
+            return connection;
         }
 
         private static void CreateExchange()
