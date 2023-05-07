@@ -66,6 +66,8 @@
   </ItemGroup>
   <ItemGroup>
     <Compile Include="DCService.cs" />
+    <Compile Include="FileChunkInfo.cs" />
+    <Compile Include="FileSender.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
   </ItemGroup>
   <ItemGroup>
@@ -74,6 +76,12 @@
   </ItemGroup>
   <ItemGroup>
     <Folder Include="DataCaptureDirectory\" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\Common\Common.csproj">
+      <Project>{455353C5-616D-41C2-B543-08B904163759}</Project>
+      <Name>Common</Name>
+    </ProjectReference>
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
 </Project>

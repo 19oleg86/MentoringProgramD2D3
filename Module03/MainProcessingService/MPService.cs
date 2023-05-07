@@ -1,73 +1,99 @@
-﻿using RabbitMQ.Client;
-using RabbitMQ.Client.Events;
-using System;
+﻿using System;
+using System.Collections.Concurrent;
 using System.IO;
 using System.Text;
+using Common.Logger;
+using Common.MessageBroker;
 
 namespace MainProcessingService
 {
-    class MPService
+    static class MPService
     {
         private const string TARGETFILEDIRECTORY = "\\TargetFileDirectory";
-        static void Main(string[] args)
+
+        private static ILogger Logger { get; } = new ConsoleLogger();
+        private static readonly ConcurrentDictionary<string, FileSaveHandler> Handlers = new ConcurrentDictionary<string, FileSaveHandler>();
+
+
+        private static async void StartFileReceiving(string fileId, FileSaveHandler saveHandler)
         {
-            string workingDirectory = Environment.CurrentDirectory;
-            string projectDirectory = Directory.GetParent(workingDirectory).Parent.FullName;
-            string filePath = $"{projectDirectory}{TARGETFILEDIRECTORY}\\";
-            
-            var connection = GetConnection();
-            var channel = connection.CreateModel();
-
-            channel.QueueDeclare("addFileQueue", true, false, false);
-            channel.QueueBind("addFileQueue", "addFileExchange", string.Empty);
-            var consumer = new EventingBasicConsumer(channel);
-            consumer.Received += (sender, eventArgs) =>
-            {
-                var fileName = Encoding.UTF8.GetString(eventArgs.BasicProperties.Headers["fileName"] as byte[]);
-                var fileSize = Encoding.UTF8.GetString(eventArgs.BasicProperties.Headers["size"] as byte[]);
-                if (fileSize == "normal")
-                {
-                    var fileBytes = eventArgs.Body.ToArray();
-                    File.WriteAllBytes($"{filePath}{fileName}", fileBytes);
-                    Console.WriteLine($"Target file path: {filePath}{fileName}");
-                    channel.BasicAck(eventArgs.DeliveryTag, false);
-                }
-                else if (fileSize == "big")
-                {
-                    var chunkNumber = Encoding.UTF8.GetString(eventArgs.BasicProperties.Headers["chunknumber"] as byte[]);
-                    var chunkData = eventArgs.Body.ToArray();
-
-                    AppendChunkToFile(chunkData, int.Parse(chunkNumber), $"{filePath}{fileName}");
-                    channel.BasicAck(eventArgs.DeliveryTag, false);
-                }
-            };
-
-            channel.BasicConsume("addFileQueue", true, consumer);
-
-            Console.WriteLine("Press any key to exit.");
-            Console.ReadLine();
-
-            channel.Close();
-            connection.Close();
+            await saveHandler.ProcessAsync();
+            Handlers.TryRemove(fileId, out _);
         }
 
-        private static IConnection GetConnection()
+        private static ISimpleMessageReceiver GetFileReceiver()
         {
-            var factory = new ConnectionFactory
+            var fileReceiver = new FileReceiver(new SimpleMessageBrokerProperties
             {
-                Uri = new Uri("amqp://guest:guest@localhost:5672")
-            };
-            var connection = factory.CreateConnection();
-            return connection;
-        }
+                Protocol = "amqp",
+                Host = "127.0.0.1",
+                Port = "5672",
+                Login = "guest",
+                Password = "guest"
+            });
+            fileReceiver.Received += OnReceiverReceived;
 
-        private static void AppendChunkToFile(byte[] chunkData, int chunkNumber, string outputFile)
-        {
-            using (var fileStream = new FileStream(outputFile, chunkNumber == 1 ? FileMode.Create : FileMode.Append))
+            try
             {
-                fileStream.Write(chunkData, 0, chunkData.Length);
+                fileReceiver.Initialize();
             }
-            Console.WriteLine($"Received chunk {chunkNumber}");
+            catch (Exception ex)
+            {
+                Logger.LogError($"Can initialize FileReceiver => {ex.Message}");
+                return null;
+            }
+
+            return fileReceiver;
+        }
+
+        private static void Main()
+        {
+            var fileReceiver = GetFileReceiver();
+
+
+            if (fileReceiver == null)
+            {
+                Logger.LogWarn("Can not start receiving files.");
+                Console.ReadLine();
+                return;
+            }
+
+            using (fileReceiver)
+            {
+                Console.ReadLine();
+            }
+        }
+
+        private static void OnReceiverReceived(object sender, ReceivedMessageDataEventArgs args)
+        {
+            var fileId = Encoding.ASCII.GetString(args.Properties["id"] as byte[] ?? Array.Empty<byte>());
+            var fileName = Encoding.UTF8.GetString(args.Properties["file-name"] as byte[] ?? Array.Empty<byte>());
+            var fileChunkNumber = (decimal)(args.Properties["file-chunk-number"] ?? 0);
+            var totalFileChunks = (decimal)(args.Properties["total-file-chunks"] ?? 0);
+
+            if (fileChunkNumber > 1 && !Handlers.TryGetValue(fileId, out _))
+            {
+                // We don't want to process files that didn't come from the very beginning
+                Logger.LogWarn($"Received unknown data [file:\"{fileName}\" chunk:{fileChunkNumber}/{totalFileChunks}], skipped.");
+                args.IsHandled = true;
+                return;
+            }
+
+            var handler = Handlers.GetOrAdd(fileId, (id) =>
+            {
+                var workingDirectory = Environment.CurrentDirectory;
+                var projectDirectory = Directory.GetParent(workingDirectory).Parent.FullName;
+                var homeFilePath = $"{projectDirectory}{TARGETFILEDIRECTORY}\\";
+                var filePath = $"{homeFilePath}{DateTime.Now.Ticks}_{fileName}";
+
+                var fileSaveHandler = new FileSaveHandler(filePath, Logger);
+                StartFileReceiving(id, fileSaveHandler);
+                return fileSaveHandler;
+            });
+            handler.AddData(args.Data);
+            Logger.LogInfo($"Received {fileName,-60} => {fileChunkNumber}/{totalFileChunks}");
+
+            args.IsHandled = true;
         }
     }
 }

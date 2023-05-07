@@ -1,11 +1,13 @@
 ﻿
 Microsoft Visual Studio Solution File, Format Version 12.00
-# Visual Studio Version 16
-VisualStudioVersion = 16.0.33529.622
+# Visual Studio Version 17
+VisualStudioVersion = 17.5.33530.505
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "DataCaptureService", "DataCaptureService\DataCaptureService.csproj", "{4C093C4E-EDA5-401E-AFE9-8F9810F0CD0C}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "MainProcessingService", "MainProcessingService\MainProcessingService.csproj", "{DFD7E1C8-8016-400F-A503-E15BB6621A5E}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Common", "Common\Common.csproj", "{455353C5-616D-41C2-B543-08B904163759}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -21,6 +23,10 @@ Global
 		{DFD7E1C8-8016-400F-A503-E15BB6621A5E}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{DFD7E1C8-8016-400F-A503-E15BB6621A5E}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{DFD7E1C8-8016-400F-A503-E15BB6621A5E}.Release|Any CPU.Build.0 = Release|Any CPU
+		{455353C5-616D-41C2-B543-08B904163759}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{455353C5-616D-41C2-B543-08B904163759}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{455353C5-616D-41C2-B543-08B904163759}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{455353C5-616D-41C2-B543-08B904163759}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

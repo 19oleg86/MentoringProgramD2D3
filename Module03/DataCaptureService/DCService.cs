@@ -1,130 +1,178 @@
-﻿using RabbitMQ.Client;
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Threading;
+using System.Threading.Tasks;
+using Common.Logger;
+using Common.MessageBroker;
+using Common.SafeFileIO.SafeFileReader;
 
 namespace DataCaptureService
 {
-    class DCService
+    static class DCService
     {
         private const string DATACAPTUREDIRECTORY = "\\DataCaptureDirectory";
-        private const int HUNDRED_MB_IN_BYTES = 104857600;
-        static void Main(string[] args)
-        {
-            CreateExchange();
-            string workingDirectory = Environment.CurrentDirectory;
-            string projectDirectory = Directory.GetParent(workingDirectory).Parent.FullName;
+        private const int MAX_MESSAGE_FILE_CHUNK_LENGTH_IN_BYTES = 5;
+        private static ILogger _logger { get; } = new ConsoleLogger();
 
-            using (var watcher = new FileSystemWatcher($"{projectDirectory}{DATACAPTUREDIRECTORY}"))
+
+        private static void Main()
+        {
+            var workingDirectory = Environment.CurrentDirectory;
+            var projectDirectory = Directory.GetParent(workingDirectory).Parent.FullName;
+
+            using (var watcher = new FileSystemWatcher($"{projectDirectory}{DATACAPTUREDIRECTORY}", "*.pdf"))
             {
                 watcher.NotifyFilter = NotifyFilters.FileName | NotifyFilters.Size;
                 watcher.Created += OnFileAdded;
                 watcher.EnableRaisingEvents = true;
 
-                Console.WriteLine($"To start working with Data Capture Service add some files in \"DataCaptureDirectoty\". {Environment.NewLine}" +
-                    $"Pay attention that only .pdf files will be processed and send to the queue");
+                _logger.LogInfo(
+                    $"To start working with Data Capture Service add some files in \"DataCaptureDirectoty\". {Environment.NewLine}" +
+                    "Pay attention that only .pdf files will be processed and send to the queue");
 
-                Console.WriteLine("Press enter to exit.");
+                _logger.LogInfo("Press enter to exit.");
                 Console.ReadLine();
             }
         }
 
+        private static ISimpleMessageSender GetFileSender()
+        {
+            var fileSender = new FileSender(new SimpleMessageBrokerProperties
+            {
+                Protocol = "amqp",
+                Host = "127.0.0.1",
+                Port = "5672",
+                Login = "guest",
+                Password = "guest"
+            });
+
+            try
+            {
+                fileSender.Initialize();
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError($"Can not initialize FileSender => {ex.Message}");
+                fileSender.Dispose();
+                return null;
+            }
+
+            return fileSender;
+        }
+
         private static void OnFileAdded(object sender, FileSystemEventArgs e)
         {
-            if (e.ChangeType == WatcherChangeTypes.Created && e.FullPath.EndsWith(".pdf"))
+            var filePath = e.FullPath;
+            Task.Factory.StartNew(() => SendFile(filePath));
+        }
+
+        private static bool SendFileChunk(ISimpleMessageSender fileSender, FileChunkInfo chunkInfo)
+        {
+            try
             {
-                string fileName = e.FullPath.Substring(e.FullPath.LastIndexOf('\\') + 1);
-                long fileSize = new FileInfo(e.FullPath).Length;
-
-                bool fileAvailable = false;
-                Console.WriteLine("Added file is in pdf format");
-                Console.WriteLine($"File's full name with path: {e.FullPath}");
-
-                var connection = GetConnection();
-                var channel = connection.CreateModel();
-                channel.ExchangeDeclare("addFileExchange", ExchangeType.Headers, true);
-                byte[] fileBytes = null;
-                while (!fileAvailable)
+                fileSender.SendMessage(chunkInfo.ChunkData, new Dictionary<string, object>
                 {
-                    try
-                    {
-                        fileBytes = File.ReadAllBytes(e.FullPath);
-                        fileAvailable = true;
-                        break;
-                    }
-                    catch (IOException)
-                    {
-                        Console.WriteLine($"File {e.FullPath} is not available yet. Retrying in 1 second.");
-                        Thread.Sleep(1000); // wait for 1 second before trying again
-                    }
-                }
-                if (fileSize >= HUNDRED_MB_IN_BYTES)
-                {
-                    Console.WriteLine($"Created file \"{e.Name}\" has 100 Mb or bigger size");
-                    var fileStream = new FileStream(e.FullPath, FileMode.Open, FileAccess.Read);
-                    var bigSizeheaders = new Dictionary<string, object>
-                            {
-                                { "fileName", fileName },
-                                { "size", "big" },
-                            };
-
-                    int chunkNumber = 1;
-                    byte[] buffer = new byte[52428800]; // 50MB
-                    while (fileStream.Position < fileStream.Length)
-                    {
-                        int bytesRead = fileStream.Read(buffer, 0, buffer.Length);
-                        byte[] chunkData = new byte[bytesRead];
-                        Array.Copy(buffer, chunkData, bytesRead);
-                        var bigSizeProperties = channel.CreateBasicProperties();
-                        bigSizeProperties.Headers = bigSizeheaders;
-                        if (!bigSizeProperties.Headers.ContainsKey("chunknumber"))
-                            bigSizeProperties.Headers.Add("chunknumber", chunkNumber.ToString());
-                        bigSizeProperties.Headers["chunknumber"] = chunkNumber.ToString();
-
-                        channel.BasicPublish("addFileExchange", string.Empty, bigSizeProperties, chunkData);
-                        Console.WriteLine($"Sent chunk {chunkNumber}");
-                        chunkNumber++;
-                    }
-                    fileStream.Close();
-                }
-                else
-                {
-                    var headers = new Dictionary<string, object>
-                            {
-                                { "fileName", fileName },
-                                { "size", "normal" }
-                            };
-                    var properties = channel.CreateBasicProperties();
-                    properties.Headers = headers;
-                    channel.BasicPublish("addFileExchange", string.Empty, properties, fileBytes);
-                }
-                channel.Close();
-                connection.Close();
+                    { "id", chunkInfo.Id },
+                    { "file-name", chunkInfo.FileName },
+                    { "file-size", chunkInfo.FileSize },
+                    { "file-chunk-number", chunkInfo.ChunkNumber },
+                    { "total-file-chunks", chunkInfo.TotalChunks }
+                });
             }
+            catch (Exception ex)
+            {
+                _logger.LogError(
+                    $"Can not send chunk number = {chunkInfo.ChunkNumber} of the file \"{chunkInfo.FileName}\" => {ex.Message}.");
+                return false;
+            }
+
+            return true;
         }
 
-        private static IConnection GetConnection()
+        private static bool TryOpenFileReader(string filePath, out ISafeFileReader fileReader)
         {
-            var factory = new ConnectionFactory
+            fileReader = null;
+            try
             {
-                Uri = new Uri("amqp://guest:guest@localhost:5672")
-            };
-            var connection = factory.CreateConnection();
-            return connection;
+                fileReader = SafeFileReader.Create(filePath, FileMode.Open, FileAccess.Read, FileShare.Read);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError($"Can not Create or Open the file \"{filePath}\" => {ex.Message}");
+                return false;
+            }
+
+            return true;
         }
 
-        private static void CreateExchange()
+        private static void SendFile(string filePath)
         {
-            var factory = new ConnectionFactory
+            if (!TryOpenFileReader(filePath, out var fileReader))
             {
-                Uri = new Uri("amqp://guest:guest@localhost:5672")
-            };
-            var connection = factory.CreateConnection();
-            var channel = connection.CreateModel();
-            channel.ExchangeDeclare("addFileExchange", ExchangeType.Headers, true);
-            channel.Close();
-            connection.Close();
+                _logger.LogWarn($"Can not open file \"{filePath}\".");
+                return;
+            }
+
+            var fileSender = GetFileSender();
+            if (fileSender == null)
+            {
+                _logger.LogWarn($"FileSender is not initialized, can not send file \"{filePath}\".");
+                return;
+            }
+
+            using (fileReader)
+            {
+                var fileName = Path.GetFileName(filePath);
+                var fileSize = new FileInfo(filePath).Length;
+                
+                using (fileSender)
+                {
+                    var totalChunks = Math.Ceiling(fileReader.Length / (decimal)MAX_MESSAGE_FILE_CHUNK_LENGTH_IN_BYTES);
+                    if (totalChunks == 0)
+                    {
+                        _logger.LogWarn($"File \"{filePath}\" is empty, skiped.");
+                        return;
+                    }
+
+                    var fileData = new byte[MAX_MESSAGE_FILE_CHUNK_LENGTH_IN_BYTES];
+                    var fileId = Guid.NewGuid().ToString("N");
+                    var fileChunkNumber = 0M;
+
+                    var fileChunkInfo = new FileChunkInfo
+                    {
+                        Id = fileId,
+                        FileName = fileName,
+                        FileSize = fileSize,
+                        //ChunkNumber =
+                        //ChunkData = 
+                        TotalChunks = totalChunks
+                    };
+
+                    var bytesRead = fileReader.Read(fileData, 0, fileData.Length);
+                    while (bytesRead > 0)
+                    {
+                        var chunkData = new byte[bytesRead];
+                        Array.Copy(fileData, chunkData, bytesRead);
+
+                        fileChunkInfo.ChunkNumber = ++fileChunkNumber;
+                        fileChunkInfo.ChunkData = chunkData;
+                        var sendFileChunkResult = SendFileChunk(fileSender, fileChunkInfo);
+                        if (!sendFileChunkResult)
+                        {
+                            _logger.LogWarn($"{fileName} is skipped, can not send chunk number = {fileChunkNumber}.");
+                            break;
+                        }
+
+                        _logger.LogInfo($"Sent {fileName,-60} => {fileChunkNumber}/{totalChunks}");
+
+                        //Simulation of a long process
+                        Thread.Sleep(200);
+
+                        bytesRead = fileReader.Read(fileData, 0, fileData.Length);
+                    }
+                }
+            }
         }
     }
 }
