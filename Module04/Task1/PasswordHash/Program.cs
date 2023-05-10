@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Linq;
 using System.Security.Cryptography;
 
 namespace PasswordHash
@@ -16,6 +17,7 @@ namespace PasswordHash
 
             string hashedPassword = GeneratePasswordHashUsingSaltImproved(password, salt);
             Console.WriteLine($"Hashed Password: {hashedPassword}");
+            Console.ReadLine();
         }
 
         public static byte[] GenerateSalt()
@@ -30,15 +32,12 @@ namespace PasswordHash
 
         public static string GeneratePasswordHashUsingSaltImproved(string passwordText, byte[] salt)
         {
-            const int saltSize = 16;  //Instead of separate hashBytes array with a fixed size of 36
-            const int hashSize = 20;  //Also constants instead of hardcoded values - better for code readability and maintainability
-            var pbkdf2 = new Rfc2898DeriveBytes(passwordText, salt, iterations: 10000);
-            byte[] hash = pbkdf2.GetBytes(hashSize);
-            var passwordHashBytes = new byte[saltSize + hashSize];
-            Buffer.BlockCopy(salt, 0, passwordHashBytes, 0, saltSize);          // More efficient copying the salt and hash into passwordHashBytes array
-            Buffer.BlockCopy(hash, 0, passwordHashBytes, saltSize, hashSize);   // in a single operation, comeparing to Array.Copy
-            var passwordHash = Convert.ToBase64String(passwordHashBytes);
-            return passwordHash;
+            const int hashSize = 20;  //Instead of hardcoded values - better for code readability and maintainability
+            using (var pbkdf2 = new Rfc2898DeriveBytes(passwordText, salt, iterations: 10000))
+            {
+                var passwordHashBytes = salt.Concat(pbkdf2.GetBytes(hashSize)).ToArray();
+                return Convert.ToBase64String(passwordHashBytes);
+            }
         }
 
         //Initial method version
