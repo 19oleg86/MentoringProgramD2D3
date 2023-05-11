@@ -1,8 +1,5 @@
-﻿using System;
-using System.Collections.Generic;
-using System.IO;
+﻿using System.IO;
 using System.Linq;
-using System.Web;
 using System.Web.Mvc;
 using ProfileSample.DAL;
 using ProfileSample.Models;
@@ -36,15 +33,17 @@ namespace ProfileSample.Controllers
                 {
                     using (var stream = new FileStream(file, FileMode.Open))
                     {
-                        var entity = new ImgSource()
+                        using (var reader = new BinaryReader(stream))
                         {
-                            Name = Path.GetFileName(file),
-                            Data = new byte[stream.Length]
-                        };
-                        stream.Read(entity.Data, 0, (int)stream.Length);
+                            var entity = new ImgSource()
+                            {
+                                Name = Path.GetFileName(file),
+                                Data = reader.ReadBytes((int)stream.Length)
+                            };
 
-                        context.ImgSources.Add(entity);
-                        context.SaveChanges();
+                            context.ImgSources.Add(entity);
+                            context.SaveChanges();
+                        }
                     }
                 }
             }
