@@ -13,7 +13,9 @@
         private readonly DispatcherTimer adTimer;
         private int imgNmb;     // the number of the image currently shown
         private string link;    // the URL where the currently shown ad leads to
-        
+
+        private readonly BitmapImage[] adImages;
+
         public AdWindow(Window owner)
         {
             var rnd = new Random();
@@ -26,6 +28,13 @@
             this.Cursor = Cursors.Hand;
             this.ShowActivated = false;
             this.MouseDown += this.OnClick;
+
+            adImages = new BitmapImage[]
+            {
+                new BitmapImage(new Uri("ad1.jpg", UriKind.Relative)),
+                new BitmapImage(new Uri("ad2.jpg", UriKind.Relative)),
+                new BitmapImage(new Uri("ad3.jpg", UriKind.Relative))
+            };
 
             this.imgNmb = rnd.Next(1, 4);
             this.ChangeAds(this, new EventArgs());
@@ -56,31 +65,12 @@
 
         private void ChangeAds(object sender, EventArgs eventArgs)
         {
+            ImageBrush myBrush = new ImageBrush();
+            myBrush.ImageSource = adImages[imgNmb];
 
-            var myBrush = new ImageBrush();
-
-            switch (this.imgNmb)
-            {
-                case 1:
-                    myBrush.ImageSource = new BitmapImage(new Uri("ad1.jpg", UriKind.Relative));
-                    this.Background = myBrush;
-                    this.link = "http://example.com";
-                    this.imgNmb++;
-                    break;
-                case 2:
-                    myBrush.ImageSource = new BitmapImage(new Uri("ad2.jpg", UriKind.Relative));
-                    this.Background = myBrush;
-                    this.link = "http://example.com";
-                    this.imgNmb++;
-                    break;
-                case 3:
-                    myBrush.ImageSource = new BitmapImage(new Uri("ad3.jpg", UriKind.Relative));
-                    this.Background = myBrush;
-                    this.link = "http://example.com";
-                    this.imgNmb = 1;
-                    break;
-            }
-            
+            Background = myBrush;
+            link = "http://example.com";
+            imgNmb = (imgNmb + 1) % adImages.Length;
         }
     }
 }
