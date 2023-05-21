@@ -7,6 +7,7 @@
  * The results could be printed in console or checked via Debugger using any Visualizer.
  */
 using System;
+using System.Linq.Expressions;
 
 namespace ExpressionTrees.Task1.ExpressionsTransformer
 {
@@ -14,12 +15,28 @@ namespace ExpressionTrees.Task1.ExpressionsTransformer
     {
         static void Main(string[] args)
         {
+            // todo: feel free to add your code here
+            CaseIncrementAndDecrement();
+
+            Console.ReadLine();
+        }
+
+        static void CaseIncrementAndDecrement()
+        {
             Console.WriteLine("Expression Visitor for increment/decrement.");
             Console.WriteLine();
 
-            // todo: feel free to add your code here
+            Expression<Func<int, int>> exprInc = i => i + 1;
+            Expression<Func<int, int>> exprDec = i => i - 1;
 
-            Console.ReadLine();
+            var expVisitor = new IncDecExpressionVisitor();
+
+            Console.WriteLine($"Increment expression representation: {expVisitor.Visit(exprInc)}");
+            Console.WriteLine($"Decrement expression representation: {expVisitor.Visit(exprDec)}");
+
+            var value = 10;
+            Console.WriteLine($"Check value + 1 = {exprInc.Compile().Invoke(value)}");
+            Console.WriteLine($"Check value - 1 = {exprDec.Compile().Invoke(value)}");
         }
     }
 }
