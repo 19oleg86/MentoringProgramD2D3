@@ -3,5 +3,16 @@
     internal class Foo
     {
         // add here some properties
+        public int IdBar { get; set; }
+
+        public string NameBar { get; set; }
+
+        public int Offset { get; set; }
+
+        public int Number { get; set; }
+
+        public string FirstName { get; set; }
+
+        public string LastName { get; set; }
     }
 }
