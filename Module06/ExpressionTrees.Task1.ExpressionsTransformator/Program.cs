@@ -26,17 +26,17 @@ namespace ExpressionTrees.Task1.ExpressionsTransformer
             Console.WriteLine("Expression Visitor for increment/decrement.");
             Console.WriteLine();
 
-            Expression<Func<int, int>> exprInc = i => i + 1;
-            Expression<Func<int, int>> exprDec = i => i - 1;
-
             var expVisitor = new IncDecExpressionVisitor();
 
-            Console.WriteLine($"Increment expression representation: {expVisitor.Visit(exprInc)}");
-            Console.WriteLine($"Decrement expression representation: {expVisitor.Visit(exprDec)}");
+            var exprInc = expVisitor.Visit((int i) => i + 1) as Expression<Func<int, int>>;
+            var exprDec = expVisitor.Visit((int i) => i - 1) as Expression<Func<int, int>>;
+
+            var incFunc = exprInc.Compile();
+            var decFunc = exprDec.Compile();
 
             var value = 10;
-            Console.WriteLine($"Check value + 1 = {exprInc.Compile().Invoke(value)}");
-            Console.WriteLine($"Check value - 1 = {exprDec.Compile().Invoke(value)}");
+            Console.WriteLine($"Input value = {value}: {exprInc} = {incFunc.Invoke(value)}");
+            Console.WriteLine($"Input value = {value}: {exprDec} = {decFunc.Invoke(value)}");
         }
     }
 }
