@@ -47,6 +47,7 @@ namespace Categories.WebApi.Controllers
         /// <response code="200">Success</response>
         [HttpGet("{id}")]
         [ProducesResponseType(StatusCodes.Status200OK)]
+        [ProducesResponseType(StatusCodes.Status404NotFound)]
         public async Task<ActionResult<CategoryDetailsVm>> Get(Guid id)
         {
             var query = new GetCategoryDetailsQuery
@@ -54,6 +55,11 @@ namespace Categories.WebApi.Controllers
                 Id = id
             };
             var vm = await Mediator.Send(query);
+
+            if (vm == null)
+            {
+                return NotFound(); // Return 404 Not Found
+            }
             return Ok(vm);
         }
 

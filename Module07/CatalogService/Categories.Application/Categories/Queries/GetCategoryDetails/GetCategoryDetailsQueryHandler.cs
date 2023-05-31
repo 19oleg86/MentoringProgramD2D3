@@ -23,10 +23,10 @@ public class GetCategoryDetailsQueryHandler
             .FirstOrDefaultAsync(x =>
             x.Id == request.Id, cancellationToken);
 
-        if (entity == null)
-        {
-            throw new NotFoundException(nameof(Category), request.Id);
-        }
+        //if (entity == null)
+        //{
+        //    throw new NotFoundException(nameof(Category), request.Id);
+        //}
 
         return _mapper.Map<CategoryDetailsVm>(entity);
     }
