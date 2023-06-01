@@ -4,6 +4,7 @@ using Categories.Application.Categories.Commands.DeleteCommand;
 using Categories.Application.Categories.Commands.UpdateCategory;
 using Categories.Application.Categories.Queries.GetCategoryDetails;
 using Categories.Application.Categories.Queries.GetCategoryList;
+using Categories.Application.Common.ErrorResponseDTO;
 using Categories.WebApi.Models;
 using Microsoft.AspNetCore.Mvc;
 
@@ -31,8 +32,20 @@ namespace Categories.WebApi.Controllers
         public async Task<ActionResult<CategoryListVm>> GetAll()
         {
             var query = new GetCategoryListQuery();
-            var vm = await Mediator.Send(query);
-            return Ok(vm);
+            try 
+            {
+                throw new NotImplementedException();  // Potentially can be SqlException, depending on database provider used
+                var vm = await Mediator.Send(query);
+                return Ok(vm);
+            }
+            catch (Exception ex) 
+            {
+                var errorResponse = new ErrorResponse
+                {
+                    Message = "We apologize, but an error occurred while processing your request. Please try again later."
+                };
+                return StatusCode(StatusCodes.Status500InternalServerError, errorResponse);
+            }
         }
 
         /// <summary>
