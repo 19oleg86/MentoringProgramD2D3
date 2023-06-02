@@ -78,6 +78,9 @@
             this.mainGrid.Clear();
         }
 
-        
+        private void ButtonStartStop_OnClick(object sender, RoutedEventArgs e)
+        {
+
+        }
     }
 }
