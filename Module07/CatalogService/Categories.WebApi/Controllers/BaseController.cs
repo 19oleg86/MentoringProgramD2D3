@@ -1,12 +1,19 @@
-﻿using MediatR;
+﻿using AutoMapper;
+using MediatR;
 using Microsoft.AspNetCore.Mvc;
 
 namespace Categories.WebApi.Controllers
 {
+    [Produces("application/json")]
+    [ProducesResponseType(StatusCodes.Status500InternalServerError)]
     public abstract class BaseController : ControllerBase
     {
-        private IMediator _mediator;
-        protected IMediator Mediator =>
-            _mediator ??= HttpContext.RequestServices.GetService<IMediator>();
+        protected readonly IMediator Mediator;
+        protected readonly IMapper Mapper;
+        protected BaseController(IMediator mediator, IMapper mapper)
+        {
+            Mediator = mediator;
+            Mapper = mapper;
+        }
     }
 }

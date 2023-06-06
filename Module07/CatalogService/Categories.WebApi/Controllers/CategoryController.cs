@@ -4,19 +4,20 @@ using Categories.Application.Categories.Commands.DeleteCommand;
 using Categories.Application.Categories.Commands.UpdateCategory;
 using Categories.Application.Categories.Queries.GetCategoryDetails;
 using Categories.Application.Categories.Queries.GetCategoryList;
-using Categories.Application.Common.ErrorResponseDTO;
 using Categories.WebApi.Models;
+using Categories.WebApi.Models.Output;
+using MediatR;
 using Microsoft.AspNetCore.Mvc;
 
 namespace Categories.WebApi.Controllers
 {
-    [Produces("application/json")]
     [Route("api/[controller]")]
     public class CategoryController : BaseController
     {
-        private readonly IMapper _mapper;
-
-        public CategoryController(IMapper mapper) => _mapper = mapper;
+        public CategoryController(IMediator mediator, IMapper mapper)
+            :base(mediator, mapper)
+        {
+        }
 
         /// <summary>
         /// Gets the list 
@@ -29,23 +30,10 @@ namespace Categories.WebApi.Controllers
         /// <response code="200">Success</response>
         [HttpGet]
         [ProducesResponseType(StatusCodes.Status200OK)]
-        public async Task<ActionResult<CategoryListVm>> GetAll()
+        public async Task<OutputDataModel<CategoryListVm>> GetAll()
         {
-            var query = new GetCategoryListQuery();
-            try 
-            {
-                throw new NotImplementedException();  // Potentially can be SqlException, depending on database provider used
-                var vm = await Mediator.Send(query);
-                return Ok(vm);
-            }
-            catch (Exception ex) 
-            {
-                var errorResponse = new ErrorResponse
-                {
-                    Message = "We apologize, but an error occurred while processing your request. Please try again later."
-                };
-                return StatusCode(StatusCodes.Status500InternalServerError, errorResponse);
-            }
+            var vm = await Mediator.Send(new GetCategoryListQuery());
+            return new OutputDataModel<CategoryListVm>(vm);
         }
 
         /// <summary>
@@ -61,19 +49,10 @@ namespace Categories.WebApi.Controllers
         [HttpGet("{id}")]
         [ProducesResponseType(StatusCodes.Status200OK)]
         [ProducesResponseType(StatusCodes.Status404NotFound)]
-        public async Task<ActionResult<CategoryDetailsVm>> Get(Guid id)
+        public async Task<OutputDataModel<CategoryDetailsVm>> Get(Guid id)
         {
-            var query = new GetCategoryDetailsQuery
-            {
-                Id = id
-            };
-            var vm = await Mediator.Send(query);
-
-            if (vm == null)
-            {
-                return NotFound(); // Return 404 Not Found
-            }
-            return Ok(vm);
+            var vm = await Mediator.Send(new GetCategoryDetailsQuery { Id = id });
+            return new OutputDataModel<CategoryDetailsVm>(vm);
         }
 
         /// <summary>
@@ -91,11 +70,11 @@ namespace Categories.WebApi.Controllers
         /// <response code="201">Success</response>
         [HttpPost]
         [ProducesResponseType(StatusCodes.Status201Created)]
-        public async Task<ActionResult<Guid>> Create([FromBody] CreateCategoryDto createCategoryDto)
+        public async Task<OutputDataModel<Guid>> Create([FromBody] CreateCategoryDto createCategoryDto)
         {
-            var command = _mapper.Map<CreateCategoryCommand>(createCategoryDto);
+            var command = Mapper.Map<CreateCategoryCommand>(createCategoryDto);
             var id = await Mediator.Send(command);
-            return Ok(id);
+            return new OutputDataModel<Guid>(id);
         }
 
         /// <summary>
@@ -115,7 +94,7 @@ namespace Categories.WebApi.Controllers
         [ProducesResponseType(StatusCodes.Status204NoContent)]
         public async Task<IActionResult> Update([FromBody] UpdateCategoryDto updateCategoryDto)
         {
-            var command = _mapper.Map<UpdateCategoryCommand>(updateCategoryDto);
+            var command = Mapper.Map<UpdateCategoryCommand>(updateCategoryDto);
             await Mediator.Send(command);
             return NoContent();
         }
@@ -134,11 +113,7 @@ namespace Categories.WebApi.Controllers
         [ProducesResponseType(StatusCodes.Status204NoContent)]
         public async Task<IActionResult> Delete(Guid id)
         {
-            var command = new DeleteCategoryCommand
-            {
-                Id = id
-            };
-            await Mediator.Send(command);
+            await Mediator.Send(new DeleteCategoryCommand { Id = id });
             return NoContent();
         }
     }
